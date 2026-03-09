@@ -98,3 +98,56 @@ class PortfolioService:
         except Exception as e:
             print(f"Black-Litterman Error in PortfolioService: {e}")
             return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
+
+    @staticmethod
+    def run_monte_carlo(tickers: List[str], weights: Dict[str, float], num_simulations: int = 10000, days: int = 252) -> Dict[str, any]:
+        """
+        Runs Monte Carlo simulations to predict future portfolio outcomes.
+        """
+        try:
+            data = MarketService.get_closing_prices(tickers)
+            if data.empty:
+                return {"error": "No data for simulation"}
+                
+            returns = data.pct_change().dropna()
+            mean_returns = returns.mean()
+            cov_matrix = returns.cov()
+            
+            # Array of weights
+            w = np.array([weights.get(t, 0) for t in data.columns]) / 100.0
+            
+            # Portfolio annual mean and vol
+            port_mean = np.sum(mean_returns * w) * days
+            port_std = np.sqrt(np.dot(w.T, np.dot(cov_matrix, w))) * np.sqrt(days)
+            
+            # Simulations (Geometric Brownian Motion)
+            sim_returns = np.random.normal(port_mean/days, port_std/np.sqrt(days), (days, num_simulations))
+            portfolio_sim = np.cumprod(1 + sim_returns, axis=0)
+            
+            final_returns = portfolio_sim[-1] - 1
+            
+            return {
+                "expected_return_annual": round(float(port_mean * 100), 2),
+                "expected_vol_annual": round(float(port_std * 100), 2),
+                "prob_loss_next_year": round(float(np.mean(final_returns < 0) * 100), 2),
+                "var_95_annual": round(float(np.percentile(final_returns, 5) * 100), 2),
+                "median_simulated_return": round(float(np.median(final_returns) * 100), 2)
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def optimize_min_volatility(tickers: List[str]) -> Dict[str, float]:
+        """
+        Solves for the portfolio with the minimum possible volatility.
+        """
+        try:
+            data = MarketService.get_closing_prices(tickers)
+            if data.empty: return {}
+            mu = expected_returns.mean_historical_return(data)
+            S = risk_models.sample_cov(data)
+            ef = EfficientFrontier(mu, S)
+            ef.min_volatility()
+            return ef.clean_weights()
+        except:
+            return {t: round(1/len(tickers), 2) for t in tickers}

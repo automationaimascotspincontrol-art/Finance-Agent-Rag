@@ -56,7 +56,10 @@ def run_portfolio_agent(state: dict):
     # 4. Perform Elite Black-Litterman Optimization
     allocation_dict = PortfolioService.optimize_black_litterman(tickers, views_dict)
     
-    # 3. Use LLM to explain the results
+    # 5. Run Monte Carlo Simulation on the proposed allocation
+    monte_carlo_results = PortfolioService.run_monte_carlo(tickers, allocation_dict)
+    
+    # 6. Use LLM to explain the results
     prompt_path = os.path.join(os.path.dirname(__file__), "../prompts/portfolio_prompt.txt")
     if os.path.exists(prompt_path):
         with open(prompt_path, "r") as f:
@@ -66,12 +69,15 @@ def run_portfolio_agent(state: dict):
     
     explanation_prompt = base_prompt.replace("{tickers}", str(tickers))
     explanation_prompt += f"\n\nCalculated Mathematically Optimized Allocation: {json.dumps(allocation_dict)}"
-    explanation_prompt += "\n\nPlease explain why this allocation makes sense based on historical volatility and returns."
+    explanation_prompt += f"\n\nFactor Screening Profile:\n{json.dumps(factors)}"
+    explanation_prompt += f"\n\nMonte Carlo 1-Year Simulation:\n{json.dumps(monte_carlo_results)}"
+    explanation_prompt += "\n\nPlease explain why this allocation makes sense based on historical volatility, factor signals, and simulated loss probabilities."
     
     explanation = call_llm(explanation_prompt, "groq")
     
     # Return both the explanation and the raw data for the UI
     return {
         "portfolio_allocation": explanation,
-        "portfolio_data": allocation_dict
+        "portfolio_data": allocation_dict,
+        "monte_carlo_results": monte_carlo_results
     }

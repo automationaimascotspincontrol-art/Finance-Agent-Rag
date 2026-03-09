@@ -45,12 +45,16 @@ def run_quant_agent(state: dict):
         base_prompt = "Analyze these metrics: {quant_data}"
     
     analysis_prompt = base_prompt.replace("{quant_data}", json.dumps(metrics_dict))
-    full_prompt = f"{analysis_prompt}\n\nQuantitative Metrics (Beta/Sharpe):\n{json.dumps(metrics_dict)}"
-    full_prompt += f"\n\nInvestment Factors (Momentum/Drawdown):\n{json.dumps(factors_dict)}"
+    full_prompt = f"{analysis_prompt}\n\nQuantitative Metrics (Beta/Sharpe/Sortino):\n{json.dumps(metrics_dict)}"
+    full_prompt += f"\n\nInvestment Factors (Momentum/Drawdown/Quality):\n{json.dumps(factors_dict)}"
+    
+    # Add Signal Scores for global ranking
+    scores = FactorEngine.calculate_signal_scores(factors_dict)
+    full_prompt += f"\n\nComposite Signal Scores (Hedge Fund Ranking):\n{json.dumps(scores)}"
     
     analysis = call_llm(full_prompt, "groq")
     
     return {
         "quant_analysis": analysis,
-        "quant_data": {**metrics_dict, **factors_dict}
+        "quant_data": {**metrics_dict, **factors_dict, "signal_scores": scores}
     }
