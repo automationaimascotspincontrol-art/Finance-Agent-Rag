@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict
 from services.market_service import MarketService
+from services.ticker_mapper import TickerMapper
 
 class PortfolioService:
     """
@@ -19,7 +20,7 @@ class PortfolioService:
         try:
             # 1. Fetch data via MarketService
             data = MarketService.get_closing_prices(tickers)
-            if data.empty:
+            if data.empty or data.shape[1] < 1:
                 return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
                 
             # 2. Compute expected returns and covariance (using log returns stabilization)
@@ -32,7 +33,12 @@ class PortfolioService:
             raw_weights = ef.max_sharpe()
             cleaned_weights = ef.clean_weights()
             
-            return {ticker: round(weight * 100, 2) for ticker, weight in cleaned_weights.items()}
+            # Use original ticker names in result
+            norm_map = {TickerMapper.normalize_ticker(t): t for t in tickers}
+            return {
+                norm_map.get(ticker, ticker): round(weight * 100, 2) 
+                for ticker, weight in cleaned_weights.items()
+            }
             
         except Exception as e:
             print(f"PortfolioService Error: {e}")
@@ -52,28 +58,43 @@ class PortfolioService:
         views: dict mapping ticker to expected annual return (e.g. {"AAPL": 0.15})
         """
         try:
-            data = MarketService.get_closing_prices(tickers + ["SPY"])
+            norm_tickers = TickerMapper.normalize_list(tickers)
+            data = MarketService.get_closing_prices(tickers) # already normalized inside
             if data.empty:
                 return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
             
-            # 1. Market Prior (Equilibrium)
-            # Use SPY as market proxy for market caps (simplified for this demo)
-            # In a real system, we'd use true market caps
-            mcaps = {t: 1.0 for t in tickers} 
-            S = risk_models.sample_cov(data[tickers])
+            # 1. Market Caps (Required for BL Equilibrium)
+            caps_dict = MarketService.get_market_caps(tickers)
+            market_caps = pd.Series(caps_dict)
             
-            # 2. Integrate Views
-            # Note: PyPortfolioOpt expects views as a series
-            view_series = pd.Series(views)
+            # 2. Covariance 
+            S = risk_models.sample_cov(data)
             
-            bl = black_litterman.BlackLittermanModel(S, pi="market", absolute_views=view_series)
+            # 3. Integrate Views
+            norm_views = {TickerMapper.normalize_ticker(t): v for t, v in views.items()}
+            view_series = pd.Series(norm_views)
+            
+            # Black-Litterman model
+            bl = black_litterman.BlackLittermanModel(
+                S, 
+                pi="market", 
+                market_caps=market_caps, 
+                absolute_views=view_series
+            )
             ret_bl = bl.bl_returns()
             S_bl = bl.bl_cov()
             
-            # 3. Optimize
+            # 4. Optimize
             ef = EfficientFrontier(ret_bl, S_bl)
             weights = ef.max_sharpe()
-            return {ticker: round(weight * 100, 2) for ticker, weight in ef.clean_weights().items()}
+            cleaned = ef.clean_weights()
+            
+            # Map back to original tickers
+            norm_map = {TickerMapper.normalize_ticker(t): t for t in tickers}
+            return {
+                norm_map.get(ticker, ticker): round(weight * 100, 2) 
+                for ticker, weight in cleaned.items()
+            }
         except Exception as e:
-            print(f"Black-Litterman Error: {e}")
+            print(f"Black-Litterman Error in PortfolioService: {e}")
             return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
