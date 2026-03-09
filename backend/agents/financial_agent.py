@@ -7,7 +7,11 @@ def run_financial_agent(state: dict):
     query = state.get("query", "")
     research_data = state.get("research_data", "")
     
-    # 1. Extract and Resolve Tickers Globally
+    # 1. Guardrail: Check for previous errors
+    if state.get("quant_error"):
+        return {"financial_analysis": "Skipped: Incomplete data grounding from quantitative engine."}
+
+    # 2. Extract and Resolve Tickers Globally
     extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['Tesla', 'TCS', 'Bitcoin']."
     extraction_res = call_llm(extraction_prompt, "groq")
     try:

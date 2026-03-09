@@ -11,6 +11,9 @@ class AgentState(TypedDict):
     quant_data: dict
     portfolio_allocation: str
     portfolio_data: dict
+    quant_error: bool
+    error_message: str
+    monte_carlo_results: dict
     final_response: str
 
 def planner_node(state: AgentState):
@@ -38,12 +41,36 @@ def portfolio_node(state: AgentState):
     return run_portfolio_agent(state)
 
 def final_node(state: AgentState):
-    final = (f"**1. Action Plan:**\n{state.get('plan')}\n\n"
-             f"**2. Research & Context:**\n{state.get('research_data')}\n\n"
-             f"**3. Quant Metrics (Sharpe/Beta):**\n{state.get('quant_analysis')}\n\n"
-             f"**4. Financial Analysis:**\n{state.get('financial_analysis')}\n\n"
-             f"**5. Risk Assessment:**\n{state.get('risk_score')}\n\n"
-             f"**6. Optimized Portfolio:**\n{state.get('portfolio_allocation')}")
+    if state.get("quant_error"):
+        final = (f"**⚠️ DATA GROUNDING ERROR:**\n{state.get('error_message')}\n\n"
+                 f"**1. Action Plan:**\n{state.get('plan')}\n\n"
+                 f"**2. Research & Context:**\n{state.get('research_data')}\n\n"
+                 f"**Note:** Quantitative Analysis, Financial Analysis, Risk, and Portfolio segments were skipped due to missing/unresolved market data.")
+    else:
+        final = (f"**1. Action Plan:**\n{state.get('plan')}\n\n"
+                 f"**2. Research & Context:**\n{state.get('research_data')}\n\n"
+                 f"**3. Quant Metrics:**\n{state.get('quant_analysis')}\n\n"
+                 f"**4. Financial Analysis:**\n{state.get('financial_analysis')}\n\n"
+                 f"**5. Risk Assessment:**\n{state.get('risk_score')}\n\n"
+                 f"**6. Optimized Portfolio:**\n{state.get('portfolio_allocation')}\n\n"
+                 f"---\n"
+                 f"### 📊 Technical Data Appendix (Institutional Grade)\n")
+        
+        # Append signal scores and quant raw data
+        quant_data = state.get("quant_data", {})
+        if quant_data:
+            final += f"\n**Signal Scores & Factors:**\n`{json.dumps(quant_data.get('signal_scores', {}), indent=2)}`"
+            
+        # Append Monte Carlo Results
+        mc = state.get("monte_carlo_results", {})
+        if mc:
+            final += f"\n\n**10k Monte Carlo Simulation Results:**\n`{json.dumps(mc, indent=2)}`"
+            
+        # Append Portfolio Weights
+        weights = state.get("portfolio_data", {})
+        if weights:
+            final += f"\n\n**Optimized Weights:**\n`{json.dumps(weights, indent=2)}`"
+            
     return {"final_response": final}
 
 def get_finance_graph():

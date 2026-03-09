@@ -8,8 +8,11 @@ def run_risk_agent(state: dict):
     query = state.get("query", "")
     financial_analysis = state.get("financial_analysis", "")
     
-    # 1. Fetch SEC filings placeholder via MarketService
-    # In a real system, we'd extract the company name first
+    # 1. Guardrail: Check for previous errors
+    if state.get("quant_error"):
+        return {"risk_score": "Skipped: Missing quantitative signals for risk modeling."}
+
+    # 2. Resolve Tickers
     extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['TSLA']."
     extraction_res = call_llm(extraction_prompt, "groq")
     try:

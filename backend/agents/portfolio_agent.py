@@ -10,7 +10,11 @@ def run_portfolio_agent(state: dict):
     query = state.get("query", "")
     financial_analysis = state.get("financial_analysis", "")
     
-    # 1. Extract and Resolve Tickers Globally
+    # 1. Guardrail: Check for previous errors
+    if state.get("quant_error"):
+        return {"portfolio_allocation": "Skipped: Mathematical frontier and simulations require valid price data."}
+
+    # 2. Extract and Resolve Tickers Globally
     extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['Tesla', 'TCS', 'Bitcoin']."
     extraction_res = call_llm(extraction_prompt, "groq")
     try:

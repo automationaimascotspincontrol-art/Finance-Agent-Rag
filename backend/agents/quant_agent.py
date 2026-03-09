@@ -23,15 +23,27 @@ def run_quant_agent(state: dict):
         tickers = []
 
     if not tickers:
-        return {"quant_analysis": "No assets identified for quantitative analysis."}
+        return {
+            "quant_analysis": "No assets identified for quantitative analysis.",
+            "quant_error": True,
+            "error_message": "Ticker resolution failed. No valid symbols found in query."
+        }
 
-    # 2. Calculate Real Metrics & Factors via PortfolioService and FactorEngine
-    # Fetch historical data first
+    # 2. Calculate Real Metrics & Factors
+    print(f"Quant: Fetching data for {tickers}...")
     prices = MarketService.get_closing_prices(tickers)
+    
+    if prices.empty:
+        return {
+            "quant_analysis": "Quantitative analysis unavailable due to missing price data.",
+            "quant_error": True,
+            "error_message": f"Market data fetch failed for {tickers}. Assets might be de-listed or tickers misconfigured."
+        }
+
     factors_dict = FactorEngine.compute_all_factors(prices)
     metrics_dict = PortfolioService.get_risk_metrics(tickers)
     
-    # Save to feature store for future ranking
+    # Save to feature store
     feature_store = FeatureStore()
     for t, fs in factors_dict.items():
         feature_store.save_features(t, fs)
@@ -56,5 +68,6 @@ def run_quant_agent(state: dict):
     
     return {
         "quant_analysis": analysis,
-        "quant_data": {**metrics_dict, **factors_dict, "signal_scores": scores}
+        "quant_data": {**metrics_dict, **factors_dict, "signal_scores": scores},
+        "quant_error": False
     }
