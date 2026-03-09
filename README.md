@@ -1,6 +1,6 @@
-# ChatGPT-Style AI Financial Agent Platform 📈🤖
+# AI Financial Agent Platform
 
-An enterprise-grade, multi-agent AI financial analysis and portfolio optimization platform. Built with a beautiful, responsive React + Vite frontend that mimics the rich ChatGPT interface, powered by a FastAPI backend orchestrated through LangGraph.
+An enterprise-grade, multi-agent AI financial analysis and portfolio optimization platform. Built with a beautiful, responsive React + Vite frontend, powered by a FastAPI backend orchestrated through LangGraph.
 
 ---
 
@@ -103,7 +103,7 @@ npm run dev
 ---
 
 ## 💡 Example Prompts to Try
-Once the app is running, paste these into the ChatGPT-style interface:
+Once the app is running, paste these into the interface:
 - **Optimization:** *"Optimize a portfolio for NVDA, TSLA, and AAPL"* (Watch the beautiful Portfolio Panel slide out!)
 - **Analysis:** *"Analyze the current market drivers for Nvidia stock."*
 - **Risk:** *"What are the core risks of investing in Meta considering industry disruption?"*
@@ -116,4 +116,4 @@ Once the app is running, paste these into the ChatGPT-style interface:
 - **Micro-animations:** Dynamic hover states, message `fadeIn` keyframes, and smooth scroll behaviors.
 
 ---
-*Built with ❤️ utilizing the latest agentic design patterns.*
+*Built utilizing the latest agentic design patterns.*
