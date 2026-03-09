@@ -3,44 +3,47 @@ import pandas as pd
 import numpy as np
 import os
 from typing import List, Optional, Dict
-from services.ticker_mapper import TickerMapper
+from services.ticker_resolver import TickerResolver
+from services.market_metadata import MarketMetadata
 
 # Global disable for yfinance cache to prevent SQLite locks during reloads
 os.environ["YFINANCE_NO_CACHE"] = "1"
 
 class MarketService:
     """
-    Handles all market data acquisition, normalization, and preprocessing.
+    Handles all market data acquisition, normalization, and preprocessing globally.
+    Supports Equities, ETFs, and Crypto.
     """
     
     @staticmethod
     def get_closing_prices(tickers: List[str], period: str = "2y") -> pd.DataFrame:
         """
-        Fetches closing prices from yfinance with normalization and safety guards.
+        Fetches closing prices from yfinance for global tickers.
         """
         try:
-            # 1. Normalize tickers (e.g. TCS -> TCS.NS)
-            normalized_tickers = TickerMapper.normalize_list(tickers)
-            
-            # 2. Download without cache/threading to avoid DB locks
+            # Note: TickerResolver should have been called at the Agent level
+            # but we guard here as well.
+            if not tickers:
+                return pd.DataFrame()
+                
             data = yf.download(
-                normalized_tickers, 
+                tickers, 
                 period=period, 
                 progress=False, 
                 threads=False
             )['Close']
             
-            if data.empty or (isinstance(data, pd.DataFrame) and data.shape[1] < 1):
-                print(f"MarketService: No price data available for {normalized_tickers}")
+            if data.empty:
+                print(f"MarketService: No price data available for {tickers}")
                 return pd.DataFrame()
             
             # Ensure it's a DataFrame even for single ticker
             if isinstance(data, pd.Series):
-                data = data.to_frame(name=normalized_tickers[0])
+                data = data.to_frame(name=tickers[0])
                 
             return data
         except Exception as e:
-            print(f"MarketService Download Error: {e}")
+            print(f"MarketService Global Download Error: {e}")
             return pd.DataFrame()
 
     @staticmethod
@@ -55,14 +58,14 @@ class MarketService:
     @staticmethod
     def get_ticker_metrics(tickers: List[str]) -> dict:
         """
-        Calculating quantitative ticker metrics (Beta, Sharpe, Vol).
+        Calculating quantitative ticker metrics (Beta, Sharpe, Vol) globally.
         """
-        normalized_tickers = TickerMapper.normalize_list(tickers)
-        all_tickers = normalized_tickers + ["SPY"]
+        all_tickers = tickers + ["SPY"] # SPY is the global US benchmark
         
         data = MarketService.get_closing_prices(all_tickers)
         if data.empty or "SPY" not in data.columns:
-            return {t: {"error": "Insufficient data"} for t in tickers}
+            # If SPY failed (maybe it's a crypto-only query), try to calculate without Beta
+            return {t: {"error": "Insufficient market data"} for t in tickers}
             
         returns = MarketService.calculate_log_returns(data)
         if returns.empty:
@@ -71,7 +74,7 @@ class MarketService:
         spy_returns = returns["SPY"]
         metrics = {}
         
-        for ticker in normalized_tickers:
+        for ticker in tickers:
             if ticker not in returns.columns:
                 continue
                 
@@ -81,18 +84,21 @@ class MarketService:
             variance = spy_returns.var()
             beta = covariance / variance if variance != 0 else 0
             
-            # Sharpe Ratio (3% risk-free rate)
+            # Sharpe Ratio
             avg_return = ticker_returns.mean() * 252
             volatility = ticker_returns.std() * (252**0.5)
             sharpe = (avg_return - 0.03) / volatility if volatility != 0 else 0
             
-            # Use original ticker in results for UI consistency
-            orig_ticker = tickers[normalized_tickers.index(ticker)]
-            metrics[orig_ticker] = {
+            # Get asset class via Metadata
+            meta = MarketMetadata.get_metadata(ticker)
+            
+            metrics[ticker] = {
                 "beta": round(float(beta), 2),
                 "sharpe": round(float(sharpe), 2),
                 "volatility": round(float(volatility * 100), 2),
-                "return_annual": round(float(avg_return * 100), 2)
+                "return_annual": round(float(avg_return * 100), 2),
+                "asset_class": meta.get("asset_class"),
+                "currency": meta.get("currency")
             }
             
         return metrics
@@ -100,45 +106,48 @@ class MarketService:
     @staticmethod
     def get_market_caps(tickers: List[str]) -> Dict[str, float]:
         """
-        Fetches market capitalization for the Black-Litterman model.
+        Fetches market capitalization globally.
         """
         caps = {}
         for ticker in tickers:
-            norm = TickerMapper.normalize_ticker(ticker)
             try:
-                stock = yf.Ticker(norm)
-                cap = stock.info.get("marketCap", 1e9) # Default to 1B if missing
-                caps[norm] = cap
+                stock = yf.Ticker(ticker)
+                cap = stock.info.get("marketCap")
+                if not cap:
+                    # Heuristic for Crypto/Alt (Total Supply * Price) or Placeholder
+                    cap = 1e9 
+                caps[ticker] = cap
             except:
-                caps[norm] = 1e9
+                caps[ticker] = 1e9
         return caps
 
     @staticmethod
     def get_stock_fundamentals(ticker: str) -> dict:
         """
-        Fetches fundamental data for a single ticker.
+        Fetches fundamental data globally.
         """
-        norm = TickerMapper.normalize_ticker(ticker)
         try:
-            stock = yf.Ticker(norm)
+            stock = yf.Ticker(ticker)
             info = stock.info
+            meta = MarketMetadata.get_metadata(ticker)
+            
             return {
-                "name": info.get("longName"),
+                "name": info.get("longName", ticker),
+                "asset_class": meta.get("asset_class"),
                 "sector": info.get("sector"),
                 "industry": info.get("industry"),
                 "market_cap": info.get("marketCap"),
                 "pe_ratio": info.get("forwardPE"),
                 "dividend_yield": info.get("dividendYield"),
-                "exchange": info.get("exchange")
+                "currency": meta.get("currency"),
+                "exchange": meta.get("exchange")
             }
         except Exception as e:
             return {"error": str(e)}
-
+            
     @staticmethod
-    def get_sec_filings_placeholder(ticker: str) -> List[dict]:
-        """SEC Filings placeholder."""
-        norm = TickerMapper.normalize_ticker(ticker)
-        return [
-            {"type": "10-K", "date": "2023-12-31", "link": f"https://www.sec.gov/cgi-bin/browse-edgar?CIK={norm}"},
-            {"type": "10-Q", "date": "2024-03-31", "link": f"https://www.sec.gov/cgi-bin/browse-edgar?CIK={norm}"}
-        ]
+    def resolve_global_tickers(queries: List[str]) -> List[str]:
+        """
+        Entry point for agents to resolve names like "Tesla" to "TSLA".
+        """
+        return TickerResolver.resolve_batch(queries)

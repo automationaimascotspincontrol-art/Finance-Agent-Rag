@@ -7,15 +7,16 @@ def run_financial_agent(state: dict):
     query = state.get("query", "")
     research_data = state.get("research_data", "")
     
-    # 1. Extract tickers for fundamentals
-    extraction_prompt = f"Extract tickers from: {query}. Return ONLY a JSON list, e.g. ['AAPL', 'MSFT']."
-    tickers_res = call_llm(extraction_prompt, "groq")
+    # 1. Extract and Resolve Tickers Globally
+    extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['Tesla', 'TCS', 'Bitcoin']."
+    extraction_res = call_llm(extraction_prompt, "groq")
     try:
         # Simple sanitization
-        cleaned = tickers_res.strip()
+        cleaned = extraction_res.strip()
         if "```" in cleaned:
             cleaned = cleaned.split("```")[1].replace("json", "").strip()
-        tickers = json.loads(cleaned)
+        queries = json.loads(cleaned)
+        tickers = MarketService.resolve_global_tickers(queries)
     except:
         tickers = []
 

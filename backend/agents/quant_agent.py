@@ -2,23 +2,26 @@ import os
 import json
 from llm.llm_router import call_llm
 from services.portfolio_service import PortfolioService
+from services.market_service import MarketService
 
 def run_quant_agent(state: dict):
     query = state.get("query", "")
     
-    # 1. Extract tickers using LLM
-    extraction_prompt = f"Extract tickers from: {query}. Return ONLY a JSON list, e.g. ['TSLA', 'AMZN']."
+    # 1. Extract and Resolve Tickers Globally
+    extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['Tesla', 'TCS', 'Bitcoin']."
     extraction_res = call_llm(extraction_prompt, "groq")
     try:
-        cleaned_json = extraction_res.strip()
-        if "```json" in cleaned_json:
-            cleaned_json = cleaned_json.split("```json")[1].split("```")[0].strip()
-        tickers = json.loads(cleaned_json)
-    except Exception:
+        cleaned = extraction_res.strip()
+        if "```" in cleaned:
+            cleaned = cleaned.split("```")[1].replace("json", "").strip()
+        queries = json.loads(cleaned)
+        # Resolve names like "Tesla" to "TSLA" or "TCS" to "TCS.NS"
+        tickers = MarketService.resolve_global_tickers(queries)
+    except:
         tickers = []
 
     if not tickers:
-        return {"quant_analysis": "No tickers identified for quantitative analysis."}
+        return {"quant_analysis": "No assets identified for quantitative analysis."}
 
     # 2. Calculate Real Metrics via PortfolioService
     metrics_dict = PortfolioService.get_risk_metrics(tickers)

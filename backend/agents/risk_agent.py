@@ -8,15 +8,16 @@ def run_risk_agent(state: dict):
     financial_analysis = state.get("financial_analysis", "")
     
     # 1. Fetch SEC filings placeholder via MarketService
-    # In a real system, we'd extract the ticker first
-    extraction_prompt = f"Extract tickers from: {query}. Return ONLY a JSON list, e.g. ['TSLA']."
-    tickers_res = call_llm(extraction_prompt, "groq")
+    # In a real system, we'd extract the company name first
+    extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['TSLA']."
+    extraction_res = call_llm(extraction_prompt, "groq")
     try:
         # Simple sanitization
-        cleaned = tickers_res.strip()
+        cleaned = extraction_res.strip()
         if "```" in cleaned:
             cleaned = cleaned.split("```")[1].replace("json", "").strip()
-        tickers = json.loads(cleaned)
+        queries = json.loads(cleaned)
+        tickers = MarketService.resolve_global_tickers(queries)
     except:
         tickers = []
     

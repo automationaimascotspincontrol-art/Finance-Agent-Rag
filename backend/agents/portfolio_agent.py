@@ -7,24 +7,17 @@ def run_portfolio_agent(state: dict):
     query = state.get("query", "")
     financial_analysis = state.get("financial_analysis", "")
     
-    # 1. Extract tickers using LLM
-    extraction_prompt = f"""
-    Extract the stock ticker symbols from the user query.
-    Query: "{query}"
-    Return ONLY a JSON list of strings, e.g., ["AAPL", "TSLA"].
-    If no tickers are found, return [].
-    """
+    # 1. Extract and Resolve Tickers Globally
+    extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['Tesla', 'TCS', 'Bitcoin']."
     extraction_res = call_llm(extraction_prompt, "groq")
     try:
-        # Basic sanitization for common LLM prefixes
-        cleaned_json = extraction_res.strip()
-        if "```json" in cleaned_json:
-            cleaned_json = cleaned_json.split("```json")[1].split("```")[0].strip()
-        elif "```" in cleaned_json:
-            cleaned_json = cleaned_json.split("```")[1].split("```")[0].strip()
-        
-        tickers = json.loads(cleaned_json)
-    except Exception:
+        cleaned = extraction_res.strip()
+        if "```" in cleaned:
+            cleaned = cleaned.split("```")[1].replace("json", "").strip()
+        queries = json.loads(cleaned)
+        # Resolve names like "Tesla" to "TSLA" or "TCS" to "TCS.NS"
+        tickers = MarketService.resolve_global_tickers(queries)
+    except:
         tickers = []
 
     if not tickers:
