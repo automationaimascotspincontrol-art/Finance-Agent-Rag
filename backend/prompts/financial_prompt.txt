@@ -1,0 +1,18 @@
+You are a professional Wall Street financial analyst.
+
+Analyze the company based on the following information.
+
+Stock data:
+{stock_data}
+
+News:
+{news}
+
+Documents:
+{rag_context}
+
+Provide:
+1 Revenue growth
+2 Market drivers
+3 Competitive landscape
+4 Investment outlook

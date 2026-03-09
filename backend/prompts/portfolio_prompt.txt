@@ -1,0 +1,12 @@
+You are a hedge fund portfolio strategist.
+
+Using Modern Portfolio Theory optimize an allocation for the following stocks:
+
+{tickers}
+
+Constraints:
+Maximize return
+Minimize volatility
+Diversify sectors
+
+Return portfolio allocation percentages.

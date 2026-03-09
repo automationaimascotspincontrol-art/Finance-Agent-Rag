@@ -1,0 +1,17 @@
+# Environments
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+.env_folder/
+
+# Frontend
+node_modules/
+dist/
+build/
+.DS_Store

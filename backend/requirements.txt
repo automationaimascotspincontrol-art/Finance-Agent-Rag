@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+langgraph
+langchain
+langchain-groq
+langchain-community
+chromadb
+tavily-python
+yfinance
+pandas
+pydantic
+python-dotenv
