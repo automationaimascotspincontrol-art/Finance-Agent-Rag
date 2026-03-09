@@ -124,24 +124,49 @@ class MarketService:
     @staticmethod
     def get_stock_fundamentals(ticker: str) -> dict:
         """
-        Fetches fundamental data globally.
+        Fetches fundamental data globally, distinguishing between Equities, ETFs, Bonds, and Crypto.
         """
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
             meta = MarketMetadata.get_metadata(ticker)
+            asset_class = meta.get("asset_class", "Equity")
             
-            return {
-                "name": info.get("longName", ticker),
-                "asset_class": meta.get("asset_class"),
-                "sector": info.get("sector"),
-                "industry": info.get("industry"),
-                "market_cap": info.get("marketCap"),
-                "pe_ratio": info.get("forwardPE"),
-                "dividend_yield": info.get("dividendYield"),
+            base_metrics = {
+                "name": info.get("longName", info.get("shortName", ticker)),
+                "asset_class": asset_class,
                 "currency": meta.get("currency"),
                 "exchange": meta.get("exchange")
             }
+            
+            if asset_class == "ETF" or asset_class == "Bond":
+                # ETFs don't have earnings. Look for Yield and Net Assets.
+                base_metrics.update({
+                    "yield": info.get("yield", info.get("dividendYield")),
+                    "expense_ratio": info.get("shortPercentOfFloat", None), # yfinance is tricky with expense ratio, but we omit PE
+                    "total_assets": info.get("totalAssets"),
+                    "nav_price": info.get("navPrice"),
+                    "category": info.get("category", "Bond/ETF")
+                })
+            elif asset_class == "Crypto":
+                base_metrics.update({
+                    "circulating_supply": info.get("circulatingSupply"),
+                    "max_supply": info.get("maxSupply"),
+                    "market_cap": info.get("marketCap", info.get("previousClose", 0) * info.get("circulatingSupply", 1))
+                })
+            else:
+                # Traditional Equities
+                base_metrics.update({
+                    "sector": info.get("sector"),
+                    "industry": info.get("industry"),
+                    "market_cap": info.get("marketCap"),
+                    "pe_ratio": info.get("forwardPE", info.get("trailingPE")),
+                    "pb_ratio": info.get("priceToBook"),
+                    "dividend_yield": info.get("dividendYield"),
+                    "profit_margins": info.get("profitMargins")
+                })
+                
+            return base_metrics
         except Exception as e:
             return {"error": str(e)}
             

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
+import PortfolioPanel from "./components/PortfolioPanel";
+import MonteCarloPanel from "./components/MonteCarloPanel";
+import CorrelationMatrix from "./components/CorrelationMatrix";
 import { ThemeProvider } from "./context/ThemeContext";
 import { sendChatQueryStreaming } from "./api/chatApi";
 import TraceIndicator from "./components/TraceIndicator";
@@ -13,11 +16,16 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [traceStatus, setTraceStatus] = useState("");
   const [allocation, setAllocation] = useState(null);
+  const [monteCarlo, setMonteCarlo] = useState(null);
+  const [riskData, setRiskData] = useState(null);
 
   const handleSendMessage = async (query) => {
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setIsLoading(true);
     setTraceStatus("Planner Agent starting...");
+    setAllocation(null);
+    setMonteCarlo(null);
+    setRiskData(null);
 
     await sendChatQueryStreaming(
       query,
@@ -29,6 +37,12 @@ function App() {
           setMessages((prev) => [...prev, { role: "ai", content: data.content }]);
           if (data.portfolio_data) {
             setAllocation(data.portfolio_data);
+          }
+          if (data.monte_carlo_results) {
+            setMonteCarlo(data.monte_carlo_results);
+          }
+          if (data.risk_data) {
+            setRiskData(data.risk_data);
           }
           setIsLoading(false);
           setTraceStatus("");
@@ -47,9 +61,11 @@ function App() {
           isLoading={isLoading}
         />
         <TraceIndicator status={traceStatus} />
-        {allocation && (
+        {(allocation || monteCarlo || riskData) && (
           <div className="right-panel">
-            <PortfolioPanel allocation={allocation} />
+            {allocation && <PortfolioPanel allocation={allocation} />}
+            {monteCarlo && <MonteCarloPanel data={monteCarlo} />}
+            {riskData && <CorrelationMatrix data={riskData} />}
           </div>
         )}
       </div>

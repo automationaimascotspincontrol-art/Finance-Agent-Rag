@@ -1,3 +1,5 @@
+import { Cpu } from "lucide-react";
+
 function TraceIndicator({ status }) {
     if (!status) return null;
 

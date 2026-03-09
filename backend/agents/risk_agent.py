@@ -13,16 +13,31 @@ def run_risk_agent(state: dict):
         return {"risk_score": "Skipped: Missing quantitative signals for risk modeling."}
 
     # 2. Resolve Tickers
+    print("Risk: Identifying assets...")
     extraction_prompt = f"Extract company names or stock symbols from: {query}. Return ONLY a JSON list, e.g. ['TSLA']."
-    extraction_res = call_llm(extraction_prompt, "groq")
+    
     try:
-        # Simple sanitization
-        cleaned = extraction_res.strip()
-        if "```" in cleaned:
-            cleaned = cleaned.split("```")[1].replace("json", "").strip()
-        queries = json.loads(cleaned)
-        tickers = MarketService.resolve_global_tickers(queries)
-    except:
+        extraction_res = call_llm(extraction_prompt, "groq")
+    except Exception as e:
+        return {
+            "risk_score": "Error in asset identification.",
+            "quant_error": True,
+            "error_message": f"LLM Failure (Extraction): {str(e)}"
+        }
+    
+    tickers = []
+    try:
+        import re
+        match = re.search(r"\[.*\]", extraction_res, re.DOTALL)
+        if match:
+            cleaned = match.group(0).replace("'", '"')
+            queries = json.loads(cleaned)
+            tickers = MarketService.resolve_global_tickers(queries)
+        else:
+            queries = [q.strip() for q in extraction_res.split(",") if q.strip()]
+            tickers = MarketService.resolve_global_tickers(queries)
+    except Exception as e:
+        print(f"Risk Extraction Error: {e}")
         tickers = []
     
     # 2. Perform Quantitative Risk Modeling
@@ -49,8 +64,19 @@ def run_risk_agent(state: dict):
         with open(prompt_path, "r") as f:
             base_prompt = f.read()
     else:
-        base_prompt = "Assess risk for {query}."
+        base_prompt = "Assess risk based on data: {risk_data}. Context: {financial_analysis}"
         
-    full_prompt = f"{base_prompt}\n\nAnalysis Context: {financial_analysis}\n\nQuantitative Risk Profile:\n{json.dumps(risk_data)}"
-    risk = call_llm(full_prompt, "groq")
-    return {"risk_score": risk}
+    full_prompt = base_prompt.replace("{risk_data}", json.dumps(risk_data, default=str))
+    full_prompt = full_prompt.replace("{financial_analysis}", financial_analysis)
+    
+    print("Risk: Explaining mathematical risk profiles...")
+    try:
+        risk_explanation = call_llm(full_prompt, "groq")
+    except Exception as e:
+        return {
+            "risk_score": f"Risk modeling unavailable due to LLM error: {str(e)}",
+            "quant_error": True,
+            "error_message": f"LLM Failure (Risk): {str(e)}"
+        }
+    
+    return {"risk_score": risk_explanation, "risk_data": risk_data}

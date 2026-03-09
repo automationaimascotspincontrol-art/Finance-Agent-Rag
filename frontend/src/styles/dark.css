@@ -1,4 +1,1 @@
-.dark {
-    background-color: #0f0f0f;
-    color: white;
-}
+/* Dark theme overrides — handled by CSS variables in index.css */

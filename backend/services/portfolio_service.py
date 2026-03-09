@@ -21,12 +21,16 @@ class PortfolioService:
             # 1. Fetch data via MarketService
             data = MarketService.get_closing_prices(tickers)
             if data.empty or data.shape[1] < 1:
-                return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
+                raise ValueError("Insufficient price data for optimization.")
                 
             # 2. Compute expected returns and covariance (using log returns stabilization)
             log_returns = MarketService.calculate_log_returns(data)
             mu = expected_returns.mean_historical_return(data)
             S = risk_models.sample_cov(data, returns=log_returns)
+            
+            # Check for invalid covariance matrix
+            if S.isnull().values.any():
+                S = risk_models.CustomCovariance().estimate(data) # Fallback to shrinkage if NaNs exist
             
             # 3. Solve the Efficient Frontier
             ef = EfficientFrontier(mu, S)
@@ -41,8 +45,8 @@ class PortfolioService:
             }
             
         except Exception as e:
-            print(f"PortfolioService Error: {e}")
-            return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
+            print(f"PortfolioService Max Sharpe Error: {e}")
+            raise Exception(f"Optimization failed: {str(e)}")
 
     @staticmethod
     def get_risk_metrics(tickers: List[str]) -> dict:
@@ -61,18 +65,27 @@ class PortfolioService:
             norm_tickers = TickerMapper.normalize_list(tickers)
             data = MarketService.get_closing_prices(tickers) # already normalized inside
             if data.empty:
-                return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
+                raise ValueError("Insufficient price data for Black-Litterman optimization.")
             
             # 1. Market Caps (Required for BL Equilibrium)
             caps_dict = MarketService.get_market_caps(tickers)
             market_caps = pd.Series(caps_dict)
             
+            # Fill missing market caps with median to prevent NaN blowups on ETFs
+            if market_caps.isnull().any():
+                market_caps.fillna(market_caps.median(), inplace=True)
+                
             # 2. Covariance 
             S = risk_models.sample_cov(data)
             
             # 3. Integrate Views
             norm_views = {TickerMapper.normalize_ticker(t): v for t, v in views.items()}
-            view_series = pd.Series(norm_views)
+            # Filter views to only include assets in the data universe
+            valid_views = {k: v for k, v in norm_views.items() if k in S.columns}
+            if not valid_views:
+                raise ValueError("No valid AI views correspond to the price data universe.")
+                
+            view_series = pd.Series(valid_views)
             
             # Black-Litterman model
             bl = black_litterman.BlackLittermanModel(
@@ -97,7 +110,7 @@ class PortfolioService:
             }
         except Exception as e:
             print(f"Black-Litterman Error in PortfolioService: {e}")
-            return {ticker: round(100.0/len(tickers), 2) for ticker in tickers}
+            raise Exception(f"Black-Litterman Optimization failed: {str(e)}")
 
     @staticmethod
     def run_monte_carlo(tickers: List[str], weights: Dict[str, float], num_simulations: int = 10000, days: int = 252) -> Dict[str, any]:

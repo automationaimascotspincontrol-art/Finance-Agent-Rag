@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
+import json
 
 class AgentState(TypedDict):
     query: str
@@ -7,6 +8,7 @@ class AgentState(TypedDict):
     research_data: str
     financial_analysis: str
     risk_score: str
+    risk_data: dict
     quant_analysis: str
     quant_data: dict
     portfolio_allocation: str

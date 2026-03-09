@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
 
 function ChatInput({ onSendMessage, isLoading }) {
     const [message, setMessage] = useState("");
@@ -18,7 +18,7 @@ function ChatInput({ onSendMessage, isLoading }) {
         <div className="chat-input-wrapper">
             <textarea
                 className="chat-input"
-                placeholder="Send a message..."
+                placeholder="Ask anything about markets, portfolios, or risk..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -34,8 +34,9 @@ function ChatInput({ onSendMessage, isLoading }) {
                     }
                 }}
                 disabled={isLoading || !message.trim()}
+                title="Send message"
             >
-                <Send size={18} />
+                {isLoading ? <Sparkles size={16} /> : <Send size={16} />}
             </button>
         </div>
     );
