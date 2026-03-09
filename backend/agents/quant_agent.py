@@ -3,6 +3,8 @@ import json
 from llm.llm_router import call_llm
 from services.portfolio_service import PortfolioService
 from services.market_service import MarketService
+from services.factor_engine import FactorEngine
+from services.feature_store import FeatureStore
 
 def run_quant_agent(state: dict):
     query = state.get("query", "")
@@ -23,8 +25,16 @@ def run_quant_agent(state: dict):
     if not tickers:
         return {"quant_analysis": "No assets identified for quantitative analysis."}
 
-    # 2. Calculate Real Metrics via PortfolioService
+    # 2. Calculate Real Metrics & Factors via PortfolioService and FactorEngine
+    # Fetch historical data first
+    prices = MarketService.get_closing_prices(tickers)
+    factors_dict = FactorEngine.compute_all_factors(prices)
     metrics_dict = PortfolioService.get_risk_metrics(tickers)
+    
+    # Save to feature store for future ranking
+    feature_store = FeatureStore()
+    for t, fs in factors_dict.items():
+        feature_store.save_features(t, fs)
     
     # 3. Explain Metrics via LLM
     prompt_path = os.path.join(os.path.dirname(__file__), "../prompts/quant_prompt.txt")
@@ -35,11 +45,12 @@ def run_quant_agent(state: dict):
         base_prompt = "Analyze these metrics: {quant_data}"
     
     analysis_prompt = base_prompt.replace("{quant_data}", json.dumps(metrics_dict))
-    analysis_prompt = analysis_prompt.replace("{query}", query)
+    full_prompt = f"{analysis_prompt}\n\nQuantitative Metrics (Beta/Sharpe):\n{json.dumps(metrics_dict)}"
+    full_prompt += f"\n\nInvestment Factors (Momentum/Drawdown):\n{json.dumps(factors_dict)}"
     
-    analysis = call_llm(analysis_prompt, "groq")
+    analysis = call_llm(full_prompt, "groq")
     
     return {
         "quant_analysis": analysis,
-        "quant_data": metrics_dict
+        "quant_data": {**metrics_dict, **factors_dict}
     }

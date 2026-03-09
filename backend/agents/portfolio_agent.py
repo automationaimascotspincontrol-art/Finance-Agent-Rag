@@ -2,6 +2,9 @@ import os
 import json
 from llm.llm_router import call_llm
 from services.portfolio_service import PortfolioService
+from services.market_service import MarketService
+from services.factor_engine import FactorEngine
+from services.feature_store import FeatureStore
 
 def run_portfolio_agent(state: dict):
     query = state.get("query", "")
@@ -23,11 +26,20 @@ def run_portfolio_agent(state: dict):
     if not tickers:
         return {"portfolio_allocation": "No specific tickers identified for optimization."}
 
-    # 2. Extract AI "Views" (Expected Returns) from Financial Analysis
+    # 2. Factor Screening & Ranking
+    # Fetch historical data and compute factors
+    prices = MarketService.get_closing_prices(tickers)
+    factors = FactorEngine.compute_all_factors(prices)
+    
+    # Simple ranking by Sharpe to filter the "Hedge Fund universe"
+    ranked_tickers = FactorEngine.rank_assets(factors, primary_factor="sharpe")
+    
+    # 3. Extract AI "Views" (Expected Returns) from Financial Analysis
     # This turns text into a mathematical prior for Black-Litterman
     view_prompt = f"""
-    Based on the following financial analysis, estimate the expected annual return (as a decimal) for each ticker.
+    Based on the following financial analysis and Factor Profile, estimate the expected annual return (as a decimal) for each ticker.
     Analysis: {financial_analysis}
+    Factors: {json.dumps(factors)}
     Tickers: {tickers}
     Return ONLY a JSON dictionary, e.g. {{"AAPL": 0.12, "TSLA": -0.05}}.
     If no view is possible, use 0.05 (5%) as neutral.
@@ -41,7 +53,7 @@ def run_portfolio_agent(state: dict):
     except:
         views_dict = {t: 0.05 for t in tickers}
 
-    # 3. Perform Elite Black-Litterman Optimization
+    # 4. Perform Elite Black-Litterman Optimization
     allocation_dict = PortfolioService.optimize_black_litterman(tickers, views_dict)
     
     # 3. Use LLM to explain the results
