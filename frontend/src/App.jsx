@@ -1,9 +1,9 @@
 import { useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
-import PortfolioPanel from "./components/PortfolioPanel";
 import { ThemeProvider } from "./context/ThemeContext";
-import { sendChatQuery } from "./api/chatApi";
+import { sendChatQueryStreaming } from "./api/chatApi";
+import TraceIndicator from "./components/TraceIndicator";
 import "./index.css";
 import "./styles/light.css";
 import "./styles/dark.css";
@@ -11,28 +11,30 @@ import "./styles/dark.css";
 function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [traceStatus, setTraceStatus] = useState("");
   const [allocation, setAllocation] = useState(null);
 
   const handleSendMessage = async (query) => {
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setIsLoading(true);
+    setTraceStatus("Planner Agent starting...");
 
-    if (query.toLowerCase().includes("optimize portfolio") || query.toLowerCase().includes("allocate")) {
-      const parsedTickers = ["NVDA", "TSLA", "AAPL"];
-      const aiResponse = `Optimizing portfolio for ${parsedTickers.join(", ")} based on Modern Portfolio Theory...`;
-
-      setMessages((prev) => [...prev, { role: "ai", content: aiResponse }]);
-
-      setTimeout(() => {
-        setAllocation({ "NVDA": 40.5, "TSLA": 25.2, "AAPL": 34.3 });
-        setIsLoading(false);
-      }, 1500);
-      return;
-    }
-
-    const aiResponse = await sendChatQuery(query);
-    setMessages((prev) => [...prev, { role: "ai", content: aiResponse }]);
-    setIsLoading(false);
+    await sendChatQueryStreaming(
+      query,
+      (status) => {
+        setTraceStatus(status);
+      },
+      (data) => {
+        if (data.type === "final") {
+          setMessages((prev) => [...prev, { role: "ai", content: data.content }]);
+          if (data.portfolio_data) {
+            setAllocation(data.portfolio_data);
+          }
+          setIsLoading(false);
+          setTraceStatus("");
+        }
+      }
+    );
   };
 
   return (
@@ -44,6 +46,7 @@ function App() {
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
         />
+        <TraceIndicator status={traceStatus} />
         {allocation && (
           <div className="right-panel">
             <PortfolioPanel allocation={allocation} />

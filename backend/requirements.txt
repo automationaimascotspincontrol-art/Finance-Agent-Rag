@@ -10,3 +10,6 @@ yfinance
 pandas
 pydantic
 python-dotenv
+numpy
+scipy
+PyPortfolioOpt

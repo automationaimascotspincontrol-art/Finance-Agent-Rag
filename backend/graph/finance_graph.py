@@ -7,7 +7,10 @@ class AgentState(TypedDict):
     research_data: str
     financial_analysis: str
     risk_score: str
+    quant_analysis: str
+    quant_data: dict
     portfolio_allocation: str
+    portfolio_data: dict
     final_response: str
 
 def planner_node(state: AgentState):
@@ -26,22 +29,28 @@ def risk_node(state: AgentState):
     from agents.risk_agent import run_risk_agent
     return run_risk_agent(state)
 
+def quant_node(state: AgentState):
+    from agents.quant_agent import run_quant_agent
+    return run_quant_agent(state)
+
 def portfolio_node(state: AgentState):
     from agents.portfolio_agent import run_portfolio_agent
     return run_portfolio_agent(state)
 
 def final_node(state: AgentState):
-    final = (f"**Plan:** {state.get('plan')}\n\n"
-             f"**Research:** {state.get('research_data')}\n\n"
-             f"**Analysis:** {state.get('financial_analysis')}\n\n"
-             f"**Risk:** {state.get('risk_score')}\n\n"
-             f"**Portfolio:** {state.get('portfolio_allocation')}")
+    final = (f"**1. Action Plan:**\n{state.get('plan')}\n\n"
+             f"**2. Research & Context:**\n{state.get('research_data')}\n\n"
+             f"**3. Quant Metrics (Sharpe/Beta):**\n{state.get('quant_analysis')}\n\n"
+             f"**4. Financial Analysis:**\n{state.get('financial_analysis')}\n\n"
+             f"**5. Risk Assessment:**\n{state.get('risk_score')}\n\n"
+             f"**6. Optimized Portfolio:**\n{state.get('portfolio_allocation')}")
     return {"final_response": final}
 
 def get_finance_graph():
     workflow = StateGraph(AgentState)
     workflow.add_node("planner", planner_node)
     workflow.add_node("research", research_node)
+    workflow.add_node("quant", quant_node)
     workflow.add_node("financial", financial_node)
     workflow.add_node("risk", risk_node)
     workflow.add_node("portfolio", portfolio_node)
@@ -49,7 +58,8 @@ def get_finance_graph():
 
     workflow.set_entry_point("planner")
     workflow.add_edge("planner", "research")
-    workflow.add_edge("research", "financial")
+    workflow.add_edge("research", "quant")
+    workflow.add_edge("quant", "financial")
     workflow.add_edge("financial", "risk")
     workflow.add_edge("risk", "portfolio")
     workflow.add_edge("portfolio", "final")
